@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>OpenVPN Site Proxy</title><link rel="stylesheet" href="popup.css"></head>
+<body>
+  <h1>OpenVPN Site Proxy</h1>
+  <p id="status" role="status">Checking proxy…</p>
+  <button id="check">Check port 1080</button>
+  <h2>Current site</h2>
+  <p id="current">Loading…</p>
+  <button id="toggle" disabled>Add this site to whitelist</button>
+  <h2>Whitelist</h2>
+  <form id="add-form"><label for="hostname">Add a hostname</label><div class="row"><input id="hostname" placeholder="example.com" required><button>Add</button></div></form>
+  <ul id="sites"></ul>
+  <p class="hint">Includes subdomains. Other hostnames connect directly. Reload the page after changes.</p>
+  <p class="hint">A ready port confirms SOCKS5 is listening; it does not confirm the VPN is connected.</p>
+  <p id="error" role="alert"></p>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

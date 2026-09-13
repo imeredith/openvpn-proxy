@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    cat <<'EOF'
+Usage: openvpn-proxy [--build] [--recreate] [-- OPENVPN_OPTIONS...]
+
+Start the local Docker service if needed and run the OpenVPN SOCKS5 container.
+--build rebuilds the image before creating the container.
+--recreate replaces the existing container using the current profile/options.
+Containers restart with Docker unless manually stopped.
+Enable Docker at boot once with: sudo systemctl enable --now docker.service
+
+VPN_DIR defaults to ~/.config/openvpn-proxy for the Arch package (respects
+XDG_CONFIG_HOME), or the vpn/ directory beside this script in a source checkout.
+VPN_DNS defaults to 1.1.1.1, resolved through the VPN for proxy requests.
+If VPN_DIR/auth.txt exists, it is used for VPN username/password authentication.
+
+Logs: docker logs -f openvpn-socks
+Stop: docker stop openvpn-socks
+EOF
+}
+
+rebuild=false
+recreate=false
+while (($#)); do
+    case "$1" in
+        --help|-h) usage; exit 0 ;;
+        --build) rebuild=true; shift ;;
+        --recreate) recreate=true; shift ;;
+        --) shift; break ;;
+        *) echo "Unknown option: $1 (use -- before OpenVPN options)" >&2; exit 2 ;;
+    esac
+done
+
+project_dir=$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")
+if [[ -f "$project_dir/Dockerfile" ]]; then
+    default_vpn_dir="$project_dir/vpn"
+else
+    project_dir=/usr/share/openvpn-proxy/docker
+    default_vpn_dir="${XDG_CONFIG_HOME:-$HOME/.config}/openvpn-proxy"
+fi
+vpn_dir=${VPN_DIR:-"$default_vpn_dir"}
+[[ -f "$vpn_dir/client.ovpn" ]] || {
+    echo "Place your OpenVPN profile at $vpn_dir/client.ovpn first." >&2
+    exit 1
+}
+vpn_dir=$(cd -- "$vpn_dir" && pwd -P)
+command -v docker >/dev/null || { echo 'Docker is required.' >&2; exit 1; }
+
+# Explicitly use the local system daemon: the browser connects to localhost.
+docker_command=(docker --host unix:///var/run/docker.sock)
+if ! "${docker_command[@]}" info >/dev/null 2>&1; then
+    elevate=()
+    if ((EUID != 0)); then
+        command -v sudo >/dev/null || { echo 'Docker access requires sudo or permission to access its socket.' >&2; exit 1; }
+        elevate=(sudo)
+    fi
+    if command -v systemctl >/dev/null && ! systemctl is-active --quiet docker; then
+        "${elevate[@]}" systemctl start docker
+    fi
+    if ! "${docker_command[@]}" info >/dev/null 2>&1; then
+        docker_command=("${elevate[@]}" docker --host unix:///var/run/docker.sock)
+        "${docker_command[@]}" info >/dev/null
+    fi
+fi
+
+container_exists=false
+if "${docker_command[@]}" container inspect openvpn-socks >/dev/null 2>&1; then
+    container_exists=true
+fi
+if $container_exists && ! $recreate; then
+    if $rebuild || (($#)); then
+        echo 'Container already exists. Add --recreate to apply a new image or options.' >&2
+        exit 1
+    fi
+    if [[ $("${docker_command[@]}" container inspect --format '{{.HostConfig.AutoRemove}}' openvpn-socks) == true ]]; then
+        echo 'Old auto-removing container detected. Run openvpn-proxy --recreate to enable restarts.' >&2
+        exit 1
+    fi
+    "${docker_command[@]}" update --restart unless-stopped openvpn-socks >/dev/null
+    "${docker_command[@]}" start openvpn-socks >/dev/null
+    echo 'Using existing openvpn-socks container; its original configuration is retained.'
+else
+    if $rebuild || ! "${docker_command[@]}" image inspect openvpn-socks >/dev/null 2>&1; then
+        "${docker_command[@]}" build -t openvpn-socks "$project_dir"
+    fi
+    # Build before stopping the old container so a build failure leaves it alone.
+    if $container_exists; then
+        "${docker_command[@]}" stop openvpn-socks >/dev/null
+        if "${docker_command[@]}" container inspect openvpn-socks >/dev/null 2>&1; then
+            "${docker_command[@]}" rm openvpn-socks >/dev/null
+        fi
+    fi
+    auth_options=()
+    [[ ! -f "$vpn_dir/auth.txt" ]] || auth_options=(--auth-user-pass /vpn/auth.txt)
+    "${docker_command[@]}" run -d --restart unless-stopped --init --name openvpn-socks \
+        --cap-add=NET_ADMIN --device=/dev/net/tun \
+        -p 127.0.0.1:1080:1080 \
+        -v "$vpn_dir:/vpn:ro" \
+        -e "VPN_DNS=${VPN_DNS:-1.1.1.1}" \
+        openvpn-socks "${auth_options[@]}" "$@" >/dev/null
+fi
+
+echo 'Container started. Wait for Initialization Sequence Completed before connecting.'
+printf 'View logs: '
+printf '%q ' "${docker_command[@]}" logs -f openvpn-socks
+printf '\nSOCKS5 endpoint: 127.0.0.1:1080\n'

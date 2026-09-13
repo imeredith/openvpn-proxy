@@ -1,0 +1,16 @@
+:root { color-scheme: light dark; font: 14px system-ui, sans-serif; }
+body { width: 340px; margin: 0; padding: 18px; }
+h1 { font-size: 19px; margin-top: 0; }
+h2 { font-size: 14px; margin-top: 22px; }
+button, input { font: inherit; border: 1px solid #8888; border-radius: 6px; padding: 8px; }
+button { cursor: pointer; }
+button:disabled { cursor: default; opacity: .6; }
+input { min-width: 0; flex: 1; }
+.row, li { display: flex; align-items: center; gap: 8px; }
+label { display: block; margin-bottom: 6px; }
+ul { list-style: none; padding: 0; max-height: 200px; overflow: auto; }
+li { justify-content: space-between; padding: 6px 0; }
+li span, #current { overflow-wrap: anywhere; }
+.hint { font-size: 12px; opacity: .75; }
+#error, .bad { color: light-dark(#a52020, #ff9a9a); }
+.good { color: light-dark(#146841, #7addac); }

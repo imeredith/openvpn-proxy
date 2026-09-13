@@ -1,0 +1,23 @@
+post_install() {
+    cat <<'EOF'
+openvpn-proxy and pssh are now on PATH.
+
+Put client.ovpn and its referenced files in ~/.config/openvpn-proxy/
+(or set VPN_DIR), then run: openvpn-proxy
+For reboot startup, also run: sudo systemctl enable --now docker.service
+
+Fully quit and reopen Chrome/Chromium to install the bundled extension.
+Find OpenVPN Site Proxy in chrome://extensions and pin it to the toolbar.
+If you previously loaded the unpacked extension, remove that copy first;
+the signed package has its own whitelist and extension ID.
+
+The Docker image is built on first launch. No VPN credentials are packaged.
+EOF
+}
+
+post_upgrade() {
+    echo 'Restart Chrome/Chromium to pick up the extension update.'
+    echo 'To rebuild the VPN image: openvpn-proxy --recreate --build'
+    echo 'For reboot startup: sudo systemctl enable --now docker.service'
+    echo 'Migrate old auto-removing containers with: openvpn-proxy --recreate'
+}

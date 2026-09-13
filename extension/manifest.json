@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "OpenVPN Site Proxy",
+  "version": "1.0.0",
+  "description": "Send selected sites through your local OpenVPN SOCKS5 proxy.",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "proxy",
+    "privacy",
+    "nativeMessaging",
+    "alarms"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "OpenVPN Site Proxy"
+  },
+  "incognito": "not_allowed",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuicAQES36BTd1NBc5TqICHdZKm2Y7MCElZPU4Ur6ZrnZC3LnLK70+SeX2wPOj4CCmciVvzVqhPJooGYWbWt/SXskwCQJu6wPZKaTk7GtwUDGE7IE9/6n/lj8cK/fleW2SHuLcd9eIUeJaUNgzs8pfi7dGBuuw9GP1+GiZX2V2GeGPlbB/DCJQ6ZFLJdvi7IZxfAHewAactZtygyRT5QLuCoHZagyIB04+pHv+vK+T/d2FgfSoUOC2Thn+/VEnA/EKTOnOazIMq3jWMA1yzGFGzd9BwliUIwu12D+jLENQmmkPTGXlrgCGPpLdl/PaN+ae5y40A+j+9MGAsLBUyUVNwIDAQAB"
+}

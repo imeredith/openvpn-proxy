@@ -1,0 +1,9 @@
+vpn/
+__pycache__/
+/.agents/
+/.codex/
+/.extension-signing-key.pem
+/src/
+/pkg/
+/*.pkg.tar.*
+/*.src.tar.*

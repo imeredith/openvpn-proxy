@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if (($# == 0)) || [[ "$1" == --help ]]; then
+    cat <<'EOF'
+Usage: pssh [SSH_OPTIONS...] [user@]host [COMMAND...]
+
+Connect using SOCKS5 at 127.0.0.1:1080, with DNS resolved by the proxy.
+Start ./openvpn-proxy first. Requires OpenSSH and socat with SOCKS5 support.
+
+Examples:
+  pssh user@example.com
+  pssh -p 2222 -i ~/.ssh/id_ed25519 user@example.com
+  pssh my-ssh-config-alias 'uname -a'
+EOF
+    exit 0
+fi
+
+command -v ssh >/dev/null || { echo 'OpenSSH is required.' >&2; exit 1; }
+command -v socat >/dev/null || { echo 'Install socat with SOCKS5 support to use pssh.' >&2; exit 1; }
+socat_help=$(socat -hh 2>&1)
+[[ "$socat_help" == *SOCKS5-CONNECT* ]] || {
+    echo 'This socat version lacks SOCKS5 support; upgrade socat.' >&2
+    exit 1
+}
+
+# Put transport options first so SSH config cannot choose another proxy.
+# Disable connection sharing to avoid reusing an existing direct SSH session.
+exec ssh \
+    -o 'ProxyCommand=exec socat - "SOCKS5-CONNECT:127.0.0.1:1080:%h:%p,connect-timeout=10"' \
+    -o ProxyUseFdpass=no \
+    -o CanonicalizeHostname=no \
+    -o VerifyHostKeyDNS=no \
+    -o ControlMaster=no \
+    -o ControlPath=none \
+    "$@"
