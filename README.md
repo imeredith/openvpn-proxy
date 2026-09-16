@@ -96,9 +96,10 @@ traffic is outside its scope.
 
 The proxy's outbound connections and DNS are restricted to `tun0`; while the
 VPN is unavailable, requests fail. IPv6 proxy egress is blocked. DNS defaults
-to `1.1.1.1`, reached **through the VPN**, not directly through the host's
-connection. Add `-e VPN_DNS=<VPN-DNS-IP>` before the image name if your provider
-requires its own IPv4 resolver. OpenVPN's pushed DNS settings are not applied.
+to `10.8.0.1`, the VPN host DNS, so private names such as
+`halo.pixels-360.com` resolve through the VPN. Add `-e VPN_DNS=<VPN-DNS-IP>`
+before the image name if your VPN uses a different IPv4 resolver. OpenVPN's
+pushed DNS settings are not applied automatically.
 Resolving the VPN server's own hostname happens before the tunnel connects.
 
 The proxy has no authentication and is published only on localhost. VPN
@@ -120,7 +121,8 @@ needed, and uses sudo when your user cannot access Docker. It builds the image
 on first use. Put your profile at `vpn/client.ovpn`; `vpn/auth.txt` is detected
 automatically. Relative paths work even when you launch from another directory.
 Use `VPN_DIR=/path/to/vpn ./openvpn-proxy` for another profile directory and
-`VPN_DNS=10.8.0.1 ./openvpn-proxy` for a provider-specific DNS server.
+`VPN_DNS=<VPN-DNS-IP> ./openvpn-proxy` to override the default DNS server at
+`10.8.0.1`.
 
 An existing `openvpn-socks` container is reused with its original settings.
 To apply changes, use `./openvpn-proxy --recreate`. This stops and replaces the

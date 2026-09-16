@@ -3,9 +3,9 @@ set -euo pipefail
 
 [[ -r /vpn/client.ovpn ]] || { echo 'Mount your OpenVPN profile at /vpn/client.ovpn' >&2; exit 1; }
 
-# Use a real DNS server, avoiding Docker's DNS forwarding outside the tunnel.
+# Use the VPN host DNS so private VPN names resolve inside the tunnel.
 # Microsocks resolves SOCKS5 hostnames here; its DNS packets must exit via tun0.
-printf 'nameserver %s\n' "${VPN_DNS:-1.1.1.1}" > /etc/resolv.conf
+printf 'nameserver %s\n' "${VPN_DNS:-10.8.0.1}" > /etc/resolv.conf
 
 # Only the proxy is restricted; OpenVPN must reach its server over eth0.
 # Allow replies to incoming SOCKS connections, then require tun0 for egress.

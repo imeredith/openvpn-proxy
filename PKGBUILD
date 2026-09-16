@@ -1,7 +1,7 @@
 # Local package: run makepkg -si from this checkout.
 pkgname=openvpn-proxy
 pkgver=1.0.0
-pkgrel=3
+pkgrel=4
 pkgdesc='OpenVPN SOCKS5 container launcher, proxied SSH, and Chrome site whitelist'
 arch=('any')
 depends=('bash' 'coreutils' 'docker' 'openssh' 'socat>=1.8.0.0' 'python' 'sudo' 'systemd')
