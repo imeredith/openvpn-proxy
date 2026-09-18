@@ -25,9 +25,10 @@ socat_help=$(socat -hh 2>&1)
 }
 
 # Put transport options first so SSH config cannot choose another proxy.
+# No leading 'exec': ssh already runs the ProxyCommand as "exec <command>".
 # Disable connection sharing to avoid reusing an existing direct SSH session.
 exec ssh \
-    -o 'ProxyCommand=exec socat - "SOCKS5-CONNECT:127.0.0.1:1080:%h:%p,connect-timeout=10"' \
+    -o 'ProxyCommand=socat - "SOCKS5-CONNECT:127.0.0.1:1080:%h:%p,connect-timeout=10"' \
     -o ProxyUseFdpass=no \
     -o CanonicalizeHostname=no \
     -o VerifyHostKeyDNS=no \

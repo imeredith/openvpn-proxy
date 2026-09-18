@@ -126,6 +126,9 @@ if args[0] == "build" and os.environ.get("DOCKER_TEST_BUILD_FAIL"):
         self.assertEqual(settings["user"], "user")
         self.assertEqual(settings["port"], "2222")
         self.assertIn("SOCKS5-CONNECT:127.0.0.1:1080:%h:%p", settings["proxycommand"])
+        # ssh runs the proxy command as `exec <command>`, so a leading "exec"
+        # of our own would make the shell look for a binary named "exec".
+        self.assertTrue(settings["proxycommand"].startswith("socat "), settings["proxycommand"])
         self.assertEqual(settings["canonicalizehostname"], "false")
         self.assertEqual(settings["verifyhostkeydns"], "false")
         self.assertEqual(settings["controlmaster"], "false")

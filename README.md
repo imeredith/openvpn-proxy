@@ -181,6 +181,24 @@ intended usage. See OpenSSH's [ProxyCommand documentation](https://man.openbsd.o
 
 For commands without `./`, add this repository directory to your `PATH`.
 
+### rsync, scp, and sftp
+
+`rsync` takes its remote shell from `-e`, so `pssh` works unchanged:
+
+```sh
+rsync -av -e pssh user@example.com:/srv/data/ ./data/
+rsync -av -e pssh ./data/ user@example.com:/srv/data/
+rsync -av -e "pssh -p 2222 -i ~/.ssh/id_ed25519" user@example.com:/srv/data/ ./data/
+```
+
+`rsync` splits `-e` on whitespace, so extra SSH options belong inline as above.
+
+`scp` and `sftp` have no `-e`; point them at the proxy directly:
+
+```sh
+scp -o 'ProxyCommand=socat - "SOCKS5-CONNECT:127.0.0.1:1080:%h:%p"' file user@example.com:/tmp/
+```
+
 ## Chrome extension
 
 With the container running, install the extension files and local port checker:
