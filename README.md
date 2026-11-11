@@ -102,7 +102,8 @@ before the image name if your VPN uses a different IPv4 resolver. OpenVPN's
 pushed DNS settings are not applied automatically.
 Resolving the VPN server's own hostname happens before the tunnel connects.
 
-The proxy has no authentication and is published only on localhost. VPN
+The proxy has no authentication and is published only on localhost by default;
+see [LAN access](#lan-access) to share it with other machines. VPN
 credentials are mounted at runtime and excluded from the image build context.
 
 References: [microsocks](https://github.com/rofl0r/microsocks) and
@@ -181,6 +182,41 @@ intended usage. See OpenSSH's [ProxyCommand documentation](https://man.openbsd.o
 
 For commands without `./`, add this repository directory to your `PATH`.
 
+### LAN access
+
+By default, only the machine running the container can use the proxy. To let
+other machines on your network use it, choose the host address to publish on
+and the client addresses allowed to connect, then recreate the container:
+
+```sh
+PROXY_BIND=0.0.0.0 PROXY_ALLOW=192.168.1.0/24 openvpn-proxy --recreate
+```
+
+`PROXY_BIND` is an IPv4 address of this host (`0.0.0.0` means all
+interfaces). `PROXY_ALLOW` is a comma-separated list of IPv4 addresses or
+CIDRs and is required whenever `PROXY_BIND` is not `127.0.0.1`. The
+container rejects SOCKS connections from any other source, and
+`127.0.0.1:1080` keeps working on the host itself. The container remembers
+these settings across restarts. To return to localhost-only access, run
+`openvpn-proxy --recreate` without them.
+
+On another machine, point its browser at this host's LAN address, such as
+`192.168.1.5:1080`: use Firefox's **SOCKS Host** field (with **Proxy DNS when
+using SOCKS v5**), the OS proxy settings, or the Chrome extension's **SOCKS5
+proxy** field. Check from that machine with
+`curl --proxy socks5h://192.168.1.5:1080 https://api.ipify.org`. On the host
+itself, use `127.0.0.1`: connecting to its own LAN address only works if that
+address is covered by `PROXY_ALLOW`.
+
+Anyone allowed by `PROXY_ALLOW` can use your VPN without a password, and can reach
+private hosts behind it. Traffic between their machine and the proxy is not
+encrypted beyond what the site itself uses (HTTPS). Only IPv4 is published,
+because Docker forwards IPv6 through its userland proxy, which would hide
+client addresses from the allowlist. For the same reason, the allowlist relies
+on Docker's default iptables port forwarding. Docker-published ports bypass
+host firewalls such as ufw, so `PROXY_ALLOW` is the access control. `pssh`
+always uses `127.0.0.1:1080`.
+
 ### rsync, scp, and sftp
 
 `rsync` takes its remote shell from `-e`, so `pssh` works unchanged:
@@ -226,7 +262,10 @@ hostnames and lets you remove entries. An entry includes its subdomains:
 `example.com` includes `www.example.com`, but adding `www.example.com` alone
 does not include `example.com`. The whitelist persists across browser restarts.
 
-Whitelisted destinations use `SOCKS5 127.0.0.1:1080` with **no direct fallback**.
+Whitelisted destinations use the proxy set in the popup's **SOCKS5 proxy**
+field, `127.0.0.1:1080` by default, with **no direct fallback**. Enter
+`host:port` and click **Save** to use a proxy on another machine; see
+[LAN access](#lan-access).
 Other destinations use a direct connection while the whitelist is active.
 This operates per destination hostname, not per tab: third-party assets,
 sign-in hosts, and redirect destinations need their own entries. Chrome's
@@ -240,13 +279,14 @@ disables browser-wide network prediction (including DNS prefetching) and
 non-proxied WebRTC UDP; those overrides are released when the list becomes
 empty. These settings can affect other tabs, including WebRTC calls.
 
-The popup and a once-per-minute badge check confirm that port 1080 answers a
-SOCKS5 handshake. A green **ON** badge means the proxy is listening and rules
+The popup and a once-per-minute badge check confirm that the configured proxy
+answers a SOCKS5 handshake. A green **ON** badge means the proxy is listening and rules
 are active; **!** means there is a problem. This does **not** verify VPN tunnel
 health. A stopped VPN can leave microsocks listening while its firewall blocks
 outbound traffic. Unavailable proxies never cause the extension to remove the
-whitelist or add a direct fallback. The helper only checks `127.0.0.1:1080`;
-it does not start Docker or accept commands to run programs.
+whitelist or add a direct fallback. The helper only opens a connection to the
+configured proxy host and port; it does not start Docker or accept commands to
+run programs.
 
 To update, rerun the installer and click **Reload** on the extension card.
 To uninstall, remove the extension in Chrome, delete

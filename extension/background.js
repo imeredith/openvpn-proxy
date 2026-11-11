@@ -1,4 +1,4 @@
-import { makePac, normalizeHost } from "./rules.mjs";
+import { DEFAULT_PROXY, makePac, normalizeHost, normalizeProxy } from "./rules.mjs";
 
 const HOST = "org.openvpn_socks.check";
 let queue = Promise.resolve();
@@ -7,16 +7,16 @@ const serial = task => {
   queue = result.catch(() => {});
   return result;
 };
-const getSites = async () => (await chrome.storage.local.get({ sites: [] })).sites;
+const getState = () => chrome.storage.local.get({ sites: [], proxy: DEFAULT_PROXY });
 
-async function apply(sites) {
+async function apply({ sites, proxy }) {
   const current = await chrome.proxy.settings.get({ incognito: false });
   if (!["controllable_by_this_extension", "controlled_by_this_extension"].includes(current.levelOfControl)) {
     throw new Error("Another extension or browser policy controls the proxy. Disable it before using this extension.");
   }
   if (sites.length) {
     await chrome.proxy.settings.set({ scope: "regular", value: {
-      mode: "pac_script", pacScript: { data: makePac(sites), mandatory: true }
+      mode: "pac_script", pacScript: { data: makePac(sites, proxy), mandatory: true }
     } });
     await chrome.privacy.network.networkPredictionEnabled.set({ value: false });
     await chrome.privacy.network.webRTCIPHandlingPolicy.set({ value: "disable_non_proxied_udp" });
@@ -28,25 +28,26 @@ async function apply(sites) {
 }
 
 async function check() {
+  const { sites, proxy } = await getState();
+  const [host, port] = proxy.split(":");
   let status;
   try {
-    status = await chrome.runtime.sendNativeMessage(HOST, { command: "check" });
+    status = await chrome.runtime.sendNativeMessage(HOST, { command: "check", host, port: Number(port) });
   } catch {
     status = { ok: false, message: "Proxy checker unavailable. Run the installer, then reload the extension." };
   }
-  const sites = await getSites();
   const control = await chrome.proxy.settings.get({ incognito: false });
   if (sites.length && control.levelOfControl !== "controlled_by_this_extension") {
     status = { ok: false, message: "Proxy rules are not active. Another extension or browser policy may control the proxy." };
   }
   await chrome.action.setBadgeText({ text: status.ok ? (sites.length ? "ON" : "") : "!" });
   await chrome.action.setBadgeBackgroundColor({ color: status.ok ? "#147d55" : "#b83932" });
-  return { sites, status };
+  return { sites, proxy, status };
 }
 
 async function initialize() {
   await chrome.alarms.create("proxy-check", { periodInMinutes: 1 });
-  await apply(await getSites());
+  await apply(await getState());
   return check();
 }
 function report(error) {
@@ -62,15 +63,20 @@ chrome.alarms.onAlarm.addListener(alarm => {
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
   if (sender.id !== chrome.runtime.id) return false;
   serial(async () => {
-    if (message.action === "add" || message.action === "remove") {
-      const host = normalizeHost(message.host);
-      const oldSites = await getSites();
-      const sites = message.action === "add" ? [...new Set([...oldSites, host])].sort() : oldSites.filter(site => site !== host);
+    if (["add", "remove", "set-proxy"].includes(message.action)) {
+      const old = await getState();
+      const state = { ...old };
+      if (message.action === "set-proxy") {
+        state.proxy = normalizeProxy(message.proxy);
+      } else {
+        const host = normalizeHost(message.host);
+        state.sites = message.action === "add" ? [...new Set([...old.sites, host])].sort() : old.sites.filter(site => site !== host);
+      }
       try {
-        await apply(sites);
-        await chrome.storage.local.set({ sites });
+        await apply(state);
+        await chrome.storage.local.set(state);
       } catch (error) {
-        await apply(oldSites).catch(report);
+        await apply(old).catch(report);
         throw error;
       }
     } else if (message.action !== "status") {

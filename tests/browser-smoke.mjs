@@ -103,13 +103,19 @@ try {
     if (status && status !== "Checking proxy…") break;
     await new Promise(resolve => setTimeout(resolve, 100));
   }
-  assert.match(status, /SOCKS5 ready|Proxy unavailable on 127\.0\.0\.1:1080|Port 1080 is open/);
+  assert.match(status, /SOCKS5 ready|Proxy unavailable on 127\.0\.0\.1:1080|127\.0\.0\.1:1080 is open/);
   const added = await evaluate('chrome.runtime.sendMessage({action: "add", host: "example.com"})');
   assert.deepEqual(added.sites, ["example.com"]);
   const settings = await evaluate('chrome.proxy.settings.get({incognito: false})');
   assert.equal(settings.levelOfControl, "controlled_by_this_extension");
   assert.equal(settings.value.mode, "pac_script");
   assert.equal(settings.value.pacScript.mandatory, true);
+  assert.equal(await evaluate('document.getElementById("proxy").value'), "127.0.0.1:1080");
+  const moved = await evaluate('chrome.runtime.sendMessage({action: "set-proxy", proxy: "127.0.0.1:1"})');
+  assert.equal(moved.proxy, "127.0.0.1:1");
+  assert.match(moved.status.message, /127\.0\.0\.1:1/);
+  const movedSettings = await evaluate('chrome.proxy.settings.get({incognito: false})');
+  assert.match(movedSettings.value.pacScript.data, /SOCKS5 127\.0\.0\.1:1"/);
   const removed = await evaluate('chrome.runtime.sendMessage({action: "remove", host: "example.com"})');
   assert.deepEqual(removed.sites, []);
   console.log("Chromium smoke test passed: popup, native checker, whitelist, and proxy settings.");

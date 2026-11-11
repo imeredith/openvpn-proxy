@@ -16,6 +16,12 @@ XDG_CONFIG_HOME), or the vpn/ directory beside this script in a source checkout.
 VPN_DNS defaults to 10.8.0.1, the VPN host DNS used for proxy requests.
 If VPN_DIR/auth.txt exists, it is used for VPN username/password authentication.
 
+The proxy is published on 127.0.0.1:1080 only. For LAN access, set PROXY_BIND
+to a host IPv4 address (or 0.0.0.0 for all interfaces) and PROXY_ALLOW to the
+comma-separated client IPv4 addresses/CIDRs allowed to connect, for example:
+  PROXY_BIND=0.0.0.0 PROXY_ALLOW=192.168.1.0/24 openvpn-proxy --recreate
+The proxy has no authentication: anyone allowed can use your VPN.
+
 Logs: docker logs -f openvpn-socks
 Stop: docker stop openvpn-socks
 EOF
@@ -41,6 +47,23 @@ else
     default_vpn_dir="${XDG_CONFIG_HOME:-$HOME/.config}/openvpn-proxy"
 fi
 vpn_dir=${VPN_DIR:-"$default_vpn_dir"}
+
+ipv4='((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])'
+proxy_bind=${PROXY_BIND:-127.0.0.1}
+proxy_allow=${PROXY_ALLOW:-}
+[[ $proxy_bind =~ ^$ipv4$ ]] || { echo "PROXY_BIND must be an IPv4 address, such as 0.0.0.0 or 192.168.1.5." >&2; exit 2; }
+cidr="$ipv4(/(3[0-2]|[12]?[0-9]))?"
+[[ -z $proxy_allow || $proxy_allow =~ ^$cidr(,$cidr)*$ ]] || { echo "PROXY_ALLOW must be comma-separated IPv4 addresses or CIDRs, such as 192.168.1.0/24." >&2; exit 2; }
+# The proxy has no authentication; never publish it beyond loopback unfiltered.
+publish=(-p 127.0.0.1:1080:1080)
+if [[ $proxy_bind != 127.0.0.1 ]]; then
+    [[ -n $proxy_allow ]] || { echo "PROXY_BIND=$proxy_bind exposes the unauthenticated proxy; set PROXY_ALLOW to the client addresses allowed to use it." >&2; exit 2; }
+    # IPv4 only: Docker relays IPv6 through its userland proxy, hiding client
+    # addresses from the allowlist. 0.0.0.0 already includes loopback;
+    # otherwise keep loopback published too for local browsers and pssh.
+    if [[ $proxy_bind == 0.0.0.0 ]]; then publish=(); fi
+    publish+=(-p "$proxy_bind:1080:1080")
+fi
 [[ -f "$vpn_dir/client.ovpn" ]] || {
     echo "Place your OpenVPN profile at $vpn_dir/client.ovpn first." >&2
     exit 1
@@ -94,11 +117,13 @@ else
     fi
     auth_options=()
     [[ ! -f "$vpn_dir/auth.txt" ]] || auth_options=(--auth-user-pass /vpn/auth.txt)
+    allow_env=()
+    [[ -z $proxy_allow ]] || allow_env=(-e "PROXY_ALLOW=$proxy_allow")
     "${docker_command[@]}" run -d --restart unless-stopped --init --name openvpn-socks \
         --cap-add=NET_ADMIN --device=/dev/net/tun \
-        -p 127.0.0.1:1080:1080 \
+        "${publish[@]}" \
         -v "$vpn_dir:/vpn:ro" \
-        -e "VPN_DNS=${VPN_DNS:-10.8.0.1}" \
+        -e "VPN_DNS=${VPN_DNS:-10.8.0.1}" "${allow_env[@]}" \
         openvpn-socks "${auth_options[@]}" "$@" >/dev/null
 fi
 
@@ -106,3 +131,6 @@ echo 'Container started. Wait for Initialization Sequence Completed before conne
 printf 'View logs: '
 printf '%q ' "${docker_command[@]}" logs -f openvpn-socks
 printf '\nSOCKS5 endpoint: 127.0.0.1:1080\n'
+if ! $container_exists || $recreate; then
+    [[ $proxy_bind == 127.0.0.1 ]] || printf 'Also published on %s:1080 for %s\n' "$proxy_bind" "$proxy_allow"
+fi

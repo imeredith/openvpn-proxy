@@ -4,7 +4,7 @@
 <body>
   <h1>OpenVPN Site Proxy</h1>
   <p id="status" role="status">Checking proxy…</p>
-  <button id="check">Check port 1080</button>
+  <button id="check">Check proxy</button>
   <h2>Current site</h2>
   <p id="current">Loading…</p>
   <button id="toggle" disabled>Add this site to whitelist</button>
@@ -12,6 +12,9 @@
   <form id="add-form"><label for="hostname">Add a hostname</label><div class="row"><input id="hostname" placeholder="example.com" required><button>Add</button></div></form>
   <ul id="sites"></ul>
   <p class="hint">Includes subdomains. Other hostnames connect directly. Reload the page after changes.</p>
+  <h2>SOCKS5 proxy</h2>
+  <form id="proxy-form"><label for="proxy">Proxy host:port</label><div class="row"><input id="proxy" placeholder="127.0.0.1:1080" required><button>Save</button></div></form>
+  <p class="hint">Use 127.0.0.1:1080 for this computer, or another machine's LAN address if it runs openvpn-proxy with PROXY_BIND.</p>
   <p class="hint">A ready port confirms SOCKS5 is listening; it does not confirm the VPN is connected.</p>
   <p id="error" role="alert"></p>
   <script type="module" src="popup.js"></script>
