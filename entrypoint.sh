@@ -13,6 +13,16 @@ iptables -A OUTPUT -m owner --uid-owner socks -p tcp --sport 1080 \
     -m conntrack --ctstate ESTABLISHED --ctdir REPLY -j ACCEPT
 iptables -A OUTPUT -m owner --uid-owner socks -o tun0 -j ACCEPT
 iptables -A OUTPUT -m owner --uid-owner socks -j REJECT
+# Optional LAN allowlist: Docker preserves LAN client addresses; the host
+# itself (loopback publishing) arrives from the bridge gateway.
+if [[ -n "${PROXY_ALLOW:-}" ]]; then
+    gateway=$(ip -4 route show default | awk '{print $3; exit}')
+    [[ -n "$gateway" ]] || { echo 'Cannot find the Docker gateway for PROXY_ALLOW.' >&2; exit 1; }
+    for source in "$gateway" ${PROXY_ALLOW//,/ }; do
+        iptables -A INPUT -p tcp --dport 1080 -s "$source" -j ACCEPT
+    done
+    iptables -A INPUT -p tcp --dport 1080 -j REJECT --reject-with tcp-reset
+fi
 # This minimal setup tunnels IPv4 only. Fail closed for IPv6 proxy egress.
 ip6tables -A OUTPUT -m owner --uid-owner socks -j REJECT
 

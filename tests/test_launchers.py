@@ -54,10 +54,37 @@ if args[0] == "build" and os.environ.get("DOCKER_TEST_BUILD_FAIL"):
         self.assertIn(f"{self.vpn}:/vpn:ro", run)
         self.assertIn("VPN_DNS=10.8.0.1", run)
         self.assertIn("127.0.0.1:1080:1080", run)
+        self.assertFalse(any(arg.startswith("PROXY_ALLOW") for arg in run))
         self.assertIn("--restart", run)
         self.assertIn("unless-stopped", run)
         self.assertNotIn("--rm", run)
         self.assertEqual(run[-5:], ["openvpn-socks", "--auth-user-pass", "/vpn/auth.txt", "--verb", "4"])
+
+    def test_lan_mode_requires_allowlist_and_keeps_loopback(self):
+        self.env["PROXY_BIND"] = "192.168.1.5"
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("PROXY_ALLOW", result.stderr)
+        self.assertFalse(self.log.exists())
+        self.env["PROXY_ALLOW"] = "192.168.1.0/24,10.0.0.7"
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        run = next(call for call in self.calls() if call[0] == "run")
+        self.assertEqual([run[i + 1] for i, arg in enumerate(run) if arg == "-p"], ["127.0.0.1:1080:1080", "192.168.1.5:1080:1080"])
+        self.assertIn("PROXY_ALLOW=192.168.1.0/24,10.0.0.7", run)
+        self.assertIn("192.168.1.5:1080", result.stdout)
+
+    def test_lan_mode_all_interfaces_is_ipv4_only(self):
+        self.env.update(PROXY_BIND="0.0.0.0", PROXY_ALLOW="192.168.1.0/24")
+        self.assertEqual(self.run_launcher().returncode, 0)
+        run = next(call for call in self.calls() if call[0] == "run")
+        self.assertEqual([run[i + 1] for i, arg in enumerate(run) if arg == "-p"], ["0.0.0.0:1080:1080"])
+
+    def test_lan_mode_rejects_invalid_addresses(self):
+        for bind, allow in [("::", "192.168.1.0/24"), ("lan", "192.168.1.0/24"), ("0.0.0.0", "192.168.1.0/33"), ("0.0.0.0", "-j ACCEPT")]:
+            self.env.update(PROXY_BIND=bind, PROXY_ALLOW=allow)
+            self.assertEqual(self.run_launcher().returncode, 2, (bind, allow))
+        self.assertFalse(self.log.exists())
 
     def test_existing_container_is_reused(self):
         self.env["DOCKER_TEST_EXISTS"] = "1"

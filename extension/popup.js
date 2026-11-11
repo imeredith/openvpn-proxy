@@ -6,6 +6,7 @@ let sites = [];
 
 function render(data) {
   sites = data.sites;
+  $("proxy").value = data.proxy;
   $("status").textContent = data.status.message;
   $("status").className = data.status.ok ? "good" : "bad";
   const matched = matchingRule(currentHost, sites);
@@ -27,11 +28,11 @@ function render(data) {
   if (!sites.length) $("sites").textContent = "No sites added yet.";
 }
 
-async function request(action, host) {
+async function request(action, host, proxy) {
   $("error").textContent = "";
   document.querySelectorAll("button").forEach(button => { button.disabled = true; });
   try {
-    const data = await chrome.runtime.sendMessage({ action, host });
+    const data = await chrome.runtime.sendMessage({ action, host, proxy });
     if (data.error) throw new Error(data.error);
     render(data);
     return true;
@@ -52,6 +53,10 @@ $("toggle").addEventListener("click", () => {
 $("add-form").addEventListener("submit", async event => {
   event.preventDefault();
   if (await request("add", $("hostname").value)) $("hostname").value = "";
+});
+$("proxy-form").addEventListener("submit", event => {
+  event.preventDefault();
+  request("set-proxy", undefined, $("proxy").value);
 });
 try {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });

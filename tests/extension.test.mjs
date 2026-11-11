@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
-import { makePac, matchingRule, normalizeHost } from "../extension/rules.mjs";
+import { makePac, matchingRule, normalizeHost, normalizeProxy } from "../extension/rules.mjs";
 
 test("PAC proxies exact hosts and subdomains without DNS lookups or direct fallback", () => {
   const context = vm.createContext({});
@@ -11,6 +11,16 @@ test("PAC proxies exact hosts and subdomains without DNS lookups or direct fallb
   }
   for (const host of ["example.com.evil.test", "notexample.com", "unlisted.test"]) {
     assert.equal(context.FindProxyForURL(`https://${host}/`, host), "DIRECT");
+  }
+});
+
+test("PAC and proxy setting use a configured LAN proxy without injection", () => {
+  const context = vm.createContext({});
+  vm.runInContext(makePac(["example.com"], "192.168.1.5:1081"), context);
+  assert.equal(context.FindProxyForURL("https://example.com/", "example.com"), "SOCKS5 192.168.1.5:1081");
+  assert.equal(normalizeProxy(" Proxy.LAN "), "proxy.lan:1080");
+  for (const value of ["", "host:0", "host:65536", "host:", "http://host:1080", "[::1]:1080", 'a";return "DIRECT";:1080']) {
+    assert.throws(() => normalizeProxy(value), undefined, value);
   }
 });
 
@@ -30,9 +40,10 @@ test("service worker persists rules and keeps them active when the proxy is unav
   let config;
   let control = "controllable_by_this_extension";
   let available = true;
+  let checked;
   const setting = { set: async () => {}, clear: async () => {} };
   globalThis.chrome = {
-    storage: { local: { get: async () => stored, set: async value => { stored = value; } } },
+    storage: { local: { get: async defaults => ({ ...defaults, ...stored }), set: async value => { stored = value; } } },
     proxy: { settings: {
       get: async () => ({ levelOfControl: control }),
       set: async value => { config = value; control = "controlled_by_this_extension"; },
@@ -43,7 +54,7 @@ test("service worker persists rules and keeps them active when the proxy is unav
     alarms: { onAlarm: { addListener: () => {} }, create: async () => {} },
     runtime: {
       id: "test",
-      sendNativeMessage: async () => ({ ok: available, message: available ? "ready" : "unavailable" }),
+      sendNativeMessage: async (host, message) => (checked = message, { ok: available, message: available ? "ready" : "unavailable" }),
       onInstalled: { addListener: () => {} }, onStartup: { addListener: () => {} },
       onMessage: { addListener: handler => { listener = handler; } }
     }
@@ -53,6 +64,14 @@ test("service worker persists rules and keeps them active when the proxy is unav
   assert.equal((await send({ action: "add", host: "example.com" })).status.ok, true);
   assert.deepEqual(stored.sites, ["example.com"]);
   assert.equal(config.value.pacScript.mandatory, true);
+  assert.match(config.value.pacScript.data, /SOCKS5 127\.0\.0\.1:1080/);
+  assert.deepEqual(checked, { command: "check", host: "127.0.0.1", port: 1080 });
+  assert.equal((await send({ action: "set-proxy", proxy: "proxy.lan:1081" })).proxy, "proxy.lan:1081");
+  assert.equal(stored.proxy, "proxy.lan:1081");
+  assert.match(config.value.pacScript.data, /SOCKS5 proxy\.lan:1081/);
+  assert.deepEqual(checked, { command: "check", host: "proxy.lan", port: 1081 });
+  assert.match((await send({ action: "set-proxy", proxy: "bad:port" })).error, /host:port/);
+  assert.equal(stored.proxy, "proxy.lan:1081");
   const activeConfig = config;
   available = false;
   assert.equal((await send({ action: "status" })).status.ok, false);
