@@ -22,6 +22,10 @@ if [[ -n "${PROXY_ALLOW:-}" ]]; then
         iptables -A INPUT -p tcp --dport 1080 -s "$source" -j ACCEPT
     done
     iptables -A INPUT -p tcp --dport 1080 -j REJECT --reject-with tcp-reset
+    # OpenVPN's def1 routes would send replies to LAN clients into tun0.
+    # Route the proxy's replies (source port 1080) back out through Docker.
+    ip rule add ipproto tcp sport 1080 lookup 100
+    ip route add default via "$gateway" dev eth0 table 100
 fi
 # This minimal setup tunnels IPv4 only. Fail closed for IPv6 proxy egress.
 ip6tables -A OUTPUT -m owner --uid-owner socks -j REJECT
