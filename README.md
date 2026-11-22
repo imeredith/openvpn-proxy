@@ -243,12 +243,21 @@ With the container running, install the extension files and local port checker:
 python3 install-extension.py
 ```
 
-The installer supports Linux Chrome and Chromium with Python 3, without sudo.
-It copies the extension to `~/.local/share/openvpn-socks-extension/extension`
-and registers a native messaging helper under each browser's
-`~/.config/<browser>/NativeMessagingHosts/` directory. XDG data/config locations
-are respected. Custom browser configurations can use `--config-home PATH`.
-Snap/Flatpak browsers may need separate native messaging integration.
+The installer supports Chrome and Chromium on Linux and macOS with Python 3,
+without sudo. It copies the extension to
+`~/.local/share/openvpn-socks-extension/extension` and registers a native
+messaging helper for each browser: under `~/.config/<browser>/NativeMessagingHosts/`
+on Linux, and under `~/Library/Application Support/<browser>/NativeMessagingHosts/`
+(`Google/Chrome`, `Google/Chrome Beta`, `Google/Chrome Canary`, `Chromium`) on
+macOS. XDG data/config locations are respected on Linux. Custom browser
+configurations can use `--config-home PATH`. Snap/Flatpak browsers may need
+separate native messaging integration.
+
+On macOS, run the installer with the Python you want the helper to use (for
+example `python3 install-extension.py` from Homebrew or python.org). Chrome
+starts the helper without your shell's `PATH`, so the installer pins that
+interpreter in the helper; rerun the installer if you remove or replace it.
+The installer does not open Chrome on macOS: go to `chrome://extensions` yourself.
 
 Chrome requires a one-time manual step for this unpublished extension:
 open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**,
@@ -293,6 +302,9 @@ To uninstall, remove the extension in Chrome, delete
 `~/.local/share/openvpn-socks-extension`, and delete
 `org.openvpn_socks.check.json` from the browser `NativeMessagingHosts`
 directories listed above (adjust for custom/XDG paths).
+
+If the popup says **Proxy checker unavailable**, the helper is not registered
+for that browser: run the installer, then click **Reload** on the extension card.
 
 Run the automated checks:
 
