@@ -61,6 +61,22 @@ class NativeTests(unittest.TestCase):
             self.assertTrue((prefix / "extension/manifest.json").is_file())
             self.assertEqual(Path(host["path"]).stat().st_mode & 0o777, 0o755)
 
+    def test_installer_macos(self):
+        spec = importlib.util.spec_from_file_location("install_extension", ROOT / "install-extension.py")
+        installer = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(installer)
+        with tempfile.TemporaryDirectory() as directory:
+            prefix, config = Path(directory) / "data", Path(directory) / "Application Support"
+            argv = ["install-extension.py", "--prefix", str(prefix), "--config-home", str(config)]
+            with patch.object(installer.sys, "platform", "darwin"), patch.object(installer.sys, "argv", argv), \
+                    patch.object(installer.subprocess, "Popen") as popen, contextlib.redirect_stdout(io.StringIO()):
+                installer.main()
+            popen.assert_not_called()
+            for browser in ("Google/Chrome", "Chromium"):
+                host = json.loads((config / browser / "NativeMessagingHosts/org.openvpn_socks.check.json").read_text())
+                self.assertEqual(Path(host["path"]), (prefix / "proxy_check.py").resolve())
+            self.assertEqual((prefix / "proxy_check.py").read_text().splitlines()[0], f"#!{installer.sys.executable}")
+
 
 if __name__ == "__main__":
     unittest.main()
